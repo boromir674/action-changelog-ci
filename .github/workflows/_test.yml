@@ -1,0 +1,20 @@
+name: Test Action Workflow
+on:
+  workflow_call:
+    inputs:
+      test_matrix:
+        description: 'JSON Object like {"test_data": [{from_ref?, to_ref?, expected_commits_array}, {...}]}; the Job Matrix: A JSON object of key (factors) mapping to arrays (of test cases to run).'
+        required: true
+        type: string
+jobs:
+  test_job_matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(inputs.test_matrix) }}
+    steps:
+      # SANITY CHECKs
+      - name: Print Test Case Data, from evaluated Input JSON Object
+        run: |
+          echo '${{ matrix.test_data.changelog }}'
+          echo '${{ matrix.test_data.head_ref }}'
+          echo '${{ matrix.test_data.expected_return_value }}'
