@@ -1,6 +1,6 @@
 ## Github Actions Metadata File ##
 # Defines inputs, outputs, and runs configuration for the action.
-name: 'Changelog Checker'
+name: 'Changelog Content Checker'
 author: Konstantinos Lampridis
 description: "Check CHANGELOG new Semantic Version markdown Section, before Release."
 
