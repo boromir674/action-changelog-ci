@@ -1,9 +1,9 @@
-name: Test Action Workflow
+name: Test Action in Scenarios returning 'true'
 on:
   workflow_call:
     inputs:
       test_matrix:
-        description: 'JSON Object like {"test_data": [{from_ref?, to_ref?, expected_commits_array}, {...}]}; the Job Matrix: A JSON object of key (factors) mapping to arrays (of test cases to run).'
+        description: 'JSON Object like {"test_data": [{changelog?, version_to_check}, {...}]}; the Job Matrix: A JSON object of key (factors) mapping to arrays (of test cases to run).'
         required: true
         type: string
 jobs:
@@ -14,7 +14,6 @@ jobs:
     env:
       TEST_MAIN: main
       TEST_REPO: 'boromir674/gitops-automation'
-      REPO: 'workdir'  # dir where to do git clone repository
       _BRANCH: "emulated-feature-branch-${{ github.run_id }}"
     steps:
       # GIVEN a changelog file a git commit ref and a main branch
@@ -62,7 +61,7 @@ jobs:
           version_to_check: ${{ matrix.test_data.version_to_check }}
 
       # THEN the action should return the value 'true'
-      - name: ASSERT Action Returns 'true' Value, 
+      - name: ASSERT Action Returns 'true' Value
         run: |
           echo "Action Return Value: ${{ steps.run_action.outputs.retval }}"
           if [ "${{ steps.run_action.outputs.retval }}" = "${{ matrix.test_data.expected_return_value }}" ]; then
