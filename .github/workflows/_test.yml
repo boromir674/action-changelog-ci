@@ -11,10 +11,74 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix: ${{ fromJSON(inputs.test_matrix) }}
+    env:
+      TEST_MAIN: main
+      TEST_REPO: 'boromir674/gitops-automation'
+      REPO: 'workdir'  # dir where to do git clone repository
+      _BRANCH: "emulated-feature-branch-${{ github.run_id }}"
     steps:
-      # SANITY CHECKs
+      # GIVEN a changelog file a git commit ref and a main branch
       - name: Print Test Case Data, from evaluated Input JSON Object
         run: |
-          echo '${{ matrix.test_data.changelog }}'
-          echo '${{ matrix.test_data.head_ref }}'
-          echo '${{ matrix.test_data.expected_return_value }}'
+          echo 'Changelog file: ${{ matrix.test_data.changelog }}'
+          echo 'Specific Version to Look For: ${{ matrix.test_data.version_to_check }}'
+          echo 'Expected Return Value: ${{ matrix.test_data.expected_return_value }}'
+          echo 'Base/Main Branch to compare against: ${{ env.TEST_MAIN }}'
+
+      # GIVEN a git repository locally checked out
+      - name: Checkout '${{ env.TEST_REPO }}' Compatible Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TEST_REPO }}
+          ref: ${{ env.TEST_MAIN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      # debug
+      - run: git log --all --oneline --decorate --graph
+
+      # GIVEN a branch with CHANGELOG.md changes
+      - name: Update CHANGELOG.md on branch '${{ env._BRANCH }}', to pass Action Rules
+        run: |
+          git config --local user.name "Konstantinos Lampridis"
+          git config --local user.email "boromir674@hotmail.com"
+
+          git checkout -b ${_BRANCH}
+
+          echo '## v${{ matrix.test_data.version_to_check || '1.0.0' }}' > "${{ matrix.test_data.changelog }}"
+          git add "${{ matrix.test_data.changelog }}"
+
+          git commit -m "auto-commit: inject markdown section in CHANGELOG.md for testing action-changelog-ci"
+          # git push origin ${_BRANCH}
+
+      # WHEN the action is run, with conditions expected to pass all Rules
+      - name: Run Action under conditions expecting to pass all Rules
+        id: run_action
+        uses: boromir674/action-changelog-ci@dev
+        with:
+          ref_to_check: ${{ env._BRANCH }}
+          main_branch: ${{ env.TEST_MAIN }}
+          changelog_file: ${{ matrix.test_data.changelog }}
+          version_to_check: ${{ matrix.test_data.version_to_check }}
+
+      # THEN the action should return the value 'true'
+      - name: ASSERT Action Returns 'true' Value, 
+        run: |
+          echo "Action Return Value: ${{ steps.run_action.outputs.retval }}"
+          if [ "${{ steps.run_action.outputs.retval }}" = "${{ matrix.test_data.expected_return_value }}" ]; then
+            echo "Action Return Value is as expected."
+          else
+            echo "[ASSERTION ERROR] Action Return Value is NOT as expected."
+            echo "Runtime value: ${{ steps.run_action.outputs.retval }}"
+            echo "Expected value: ${{ matrix.test_data.expected_return_value }}"
+            exit 1
+          fi
+
+      # TEARDOWN / CLEAN UP (requires permission to push to repository, ie Contents read/write)
+      # - name: Delete '${{ env._BRANCH }}' branch
+      #   if: always()
+      #   working-directory: ${{ env.REPO }}
+      #   run: |
+      #     git push origin --delete ${_BRANCH}
+      #     git checkout ${env.TEST_MAIN}
+      #     git branch -D ${_BRANCH}
