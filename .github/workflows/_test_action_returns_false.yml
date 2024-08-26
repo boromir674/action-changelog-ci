@@ -1,0 +1,67 @@
+name: Test Action in Scenarios expecting to 'false'
+on:
+  workflow_call:
+    inputs:
+      test_matrix:
+        description: 'JSON Object like {"test_data": [{changelog?, version_to_check}, {...}]}; the Job Matrix: A JSON object of key (factors) mapping to arrays (of test cases to run).'
+        required: true
+        type: string
+jobs:
+  test_action_returns_false:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJSON(inputs.test_matrix) }}
+    env:
+      TEST_MAIN: main
+      TEST_REPO: 'boromir674/gitops-automation'
+      _BRANCH: "emulated-feature-branch-${{ github.run_id }}"
+    steps:
+      # GIVEN a Test Data that should result in a 'false' value being returned by the Action
+      - name: Print Test Case Data, from evaluated Input JSON Object
+        run: |
+          echo 'Changelog file: ${{ matrix.test_data.changelog }}'
+          echo 'Specific Version to Look For: ${{ matrix.test_data.version_to_check }}'
+          echo 'Expected Return Value: ${{ matrix.test_data.expected_return_value }}'
+          echo 'Base/Main Branch to compare against: ${{ env.TEST_MAIN }}'
+
+      # GIVEN a git repository locally checked out
+      - name: Checkout '${{ env.TEST_REPO }}' Compatible Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TEST_REPO }}
+          ref: ${{ env.TEST_MAIN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      # GIVEN a branch WITHOUT CHANGELOG.md changes
+      - name: Emulate a feature branch with NO CHANGELOG.md update
+        run: |
+          git config --local user.name "Konstantinos Lampridis"
+          git config --local user.email "boromir674@hotmail.com"
+          git checkout -b ${_BRANCH}
+          echo 'test text' > test_file.txt
+          git add test_file.txt
+          git commit -m "auto-commit: emulate a feature branch without CHANGELOG.md changes"
+
+      # WHEN the action is run, with conditions expected to fail some Rule
+      - name: Run Action under conditions expecting to fail some rule and return 'false'
+        id: run_action
+        uses: boromir674/action-changelog-ci@dev
+        with:
+          ref_to_check: ${{ env._BRANCH }}
+          main_branch: ${{ env.TEST_MAIN }}
+          changelog_file: ${{ matrix.test_data.changelog }}
+          version_to_check: ${{ matrix.test_data.version_to_check }}
+
+      # THEN the action should return the value 'false'
+      - name: ASSERT Action Returns 'false' Value
+        run: |
+          echo "Action Return Value: ${{ steps.run_action.outputs.retval }}"
+          if [ "${{ steps.run_action.outputs.retval }}" = "${{ matrix.test_data.expected_return_value }}" ]; then
+            echo "Action Return Value is as expected."
+          else
+            echo "[ASSERTION ERROR] Action Return Value is NOT as expected."
+            echo "Runtime value: ${{ steps.run_action.outputs.retval }}"
+            echo "Expected value: ${{ matrix.test_data.expected_return_value }}"
+            exit 1
+          fi
