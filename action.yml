@@ -86,7 +86,7 @@ runs:
     - name: CHECK CHANGELOG has any changes
       run: |
         if git diff --exit-code "origin/${{ inputs.main_branch }}" '${{ inputs.ref_to_check }}' -- '${{ inputs.changelog_file }}'; then
-          echo >&2 "[WARN] Changelog file '${{ inputs.changelog_file }}' has NO CHANGES at all, compared to '${{ env.MAIN_BR }}' branch."
+          echo >&2 "[WARN] Changelog file '${{ inputs.changelog_file }}' has NO CHANGES at all, compared to '${{ inputs.main_branch }}' branch."
         echo _RULE_FAILED=true >> $GITHUB_ENV
         fi
       shell: bash
