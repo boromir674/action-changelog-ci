@@ -30,3 +30,5 @@ gen-config.yml
 site
 gen-config.yml
 reqs.txt
+package.json
+package-lock.json
