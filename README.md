@@ -11,3 +11,6 @@
 
 ## Get started
 
+## Use Cases
+
+Implementing a CI check for your `CHANGELOG.md`, during your release process.
