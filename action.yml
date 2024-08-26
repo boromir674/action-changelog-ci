@@ -110,7 +110,7 @@ runs:
       run: |
         reg_ex_search_failed=false
 
-        python -c "import re, sys; sys.exit(0 if re.search(r'^## ${SEMVER_REGEX}', open('${{ inputs.changelog_file }}').read(), re.MULTILINE) else 1)" || reg_ex_search_failed=true
+        python -c "import re, sys; sys.exit(0 if re.search(r'## ${SEMVER_REGEX}', open('${{ inputs.changelog_file }}').read(), re.MULTILINE) else 1)" || reg_ex_search_failed=true
 
         if [ reg_ex_search_failed=true ]; then
           echo "[WARN] Could not find an entry for the new Release Version '${{ steps.sem_ver.outputs.SEMVER }}' in Changelog file '${{ inputs.changelog_file }}'"
