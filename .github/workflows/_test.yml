@@ -44,7 +44,7 @@ jobs:
 
           git checkout -b ${_BRANCH}
 
-          echo '## v${{ matrix.test_data.version_to_check || '1.0.0' }}' > "${{ matrix.test_data.changelog }}"
+          echo '## v${{ matrix.test_data.version_to_check || '2.0.0' }}' > "${{ matrix.test_data.changelog }}"
           git add "${{ matrix.test_data.changelog }}"
 
           git commit -m "auto-commit: inject markdown section in CHANGELOG.md for testing action-changelog-ci"
