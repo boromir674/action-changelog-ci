@@ -1,0 +1,137 @@
+## Github Actions Metadata File ##
+# Defines inputs, outputs, and runs configuration for the action.
+name: 'Changelog Checker'
+author: Konstantinos Lampridis
+description: "Check CHANGELOG new Semantic Version markdown Section, before Release."
+
+inputs:
+  ref_to_check:  # id of input
+    description: >
+      Git Commit Ref with expected CHANGELOG changes.
+      Defaults to HEAD, if value not passed
+    required: false
+    default: 'HEAD'
+  main_branch:  # id of input
+    description: >
+      Main Branch of the Repository. Defaults to 'main', if value not passed.
+      This should be the branch were code merges are done and possibly hosts
+      the Semantically tagged commits/releases.
+    required: false
+    default: 'main'
+  changelog_file:
+    description: >
+      Path to CHANGELOG file. Defaults to 'CHANGELOG.md', if value not passed.
+    required: false
+    default: 'CHANGELOG.md'
+  version_to_check:
+    description: >
+      Require specific Semantic Version to be discovered in CHANGELOG.
+      If not passed, rule defaults to requiring a Sem Ver (Reg Ex) pattern, to be found in markdown section header.
+      If passed, rule requires a markdown section header with the exact version string.
+    required: false
+
+outputs:
+# Outputs are Unicode strings, and can be a maximum of 1 MB. The total of all outputs in a workflow run can be a maximum of 50 MB.
+  retval: # Return Value string, representing boolean 'true' or 'false'
+    description: >
+      Boolean as string, 'true' if CHANGELOG was updated according to the rules
+      (ie has Semantic Version in a new Markdown Section),
+      'false' otherwise.
+    value: ${{ steps.set_output.outputs.retval }}
+
+runs:
+  using: "composite"
+  steps:
+    # VERIFY INPUTS: Refs exist in local (git) checkout
+    - name: Verify input reference exists in local (git) checkout
+      run: |
+        if ! git rev-parse "${{ inputs.ref_to_check }}" >/dev/null 2>&1; then
+          echo "[ERROR] Git ref '${{ inputs.ref_to_check }}' not found."
+          git log --all --oneline --decorate --graph
+          echo
+          echo "Local (git) checkout does not contain a commit with ref '${{ inputs.ref_to_check }}'."
+          echo "Input parameter 'ref_to_check' must be a reference (value) that points to an existing commit in the local checkout."
+          echo "Exiting with error."
+          exit 1
+        fi
+
+      shell: bash
+        # if ! git rev-parse "${{ inputs.main_branch }}" >/dev/null 2>&1; then
+        #   echo "[ERROR] Git ref '${{ inputs.main_branch }}' not found."
+        #   echo "Local (git) checkout does not contain a commit with ref '${{ inputs.main_branch }}'."
+        #   echo "Input parameter 'main_branch' must be a reference (value) that points to an existing commit in the local checkout."
+        #   echo "Exiting with error."
+        #   exit 1
+        # fi
+    
+    # VERIFY INPUTS: Changelog file exists in local (git) checkout
+    - name: Verify CHANGELOG file exists in local (git) checkout
+      run: |
+        if [ ! -f "${{ inputs.changelog_file }}" ]; then
+          echo "[ERROR] CHANGELOG file '${{ inputs.changelog_file }}' not found."
+          echo "Local (git) checkout does not contain a file with path '${{ inputs.changelog_file }}'."
+          echo "Input parameter 'changelog_file' must be a path to an existing file in the local checkout."
+          echo "- If repository was not checked out, please add the 'actions/checkout@v4' step, prior to this action."
+          echo "Exiting with error."
+          exit 1
+        fi
+      shell: bash
+
+    # INITIALIZE Internal Flag for Rule Failure
+    - name: INITIALIZE Internal Flag for Rule Failure
+      run: echo _RULE_FAILED=false >> $GITHUB_ENV
+      shell: bash
+
+    # CHECK CHANGELOG: Has any change since in MAIN branch
+    - name: CHECK CHANGELOG has any changes
+      run: |
+        if git diff --exit-code "origin/${{ inputs.main_branch }}" '${{ inputs.ref_to_check }}' -- '${{ inputs.changelog_file }}'; then
+          echo >&2 "[WARN] Changelog file '${{ inputs.changelog_file }}' has NO CHANGES at all, compared to '${{ env.MAIN_BR }}' branch."
+        echo _RULE_FAILED=true >> $GITHUB_ENV
+        fi
+      shell: bash
+
+    # IF version_to_check NOT provided, create REGEX from Sem Ver pattern
+    - name: SET RegEx Search Pattern to Sem Ver Pattern, IF Version NOT provided
+      if: ${{ env._RULE_FAILED == 'false' && ! inputs.version_to_check }}
+      run: echo SEMVER_REGEX='(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?' >> $GITHUB_ENV
+      shell: bash
+
+    # IF version_to_check NOT provided, create simple REGEX from it
+    - name: SET RegEx Search Pattern to Input Version, IF provided
+      if: ${{ env._RULE_FAILED == 'false' && inputs.version_to_check }}
+      run: echo SEMVER_REGEX='v?${{ inputs.version_to_check }}' >> $GITHUB_ENV
+      shell: bash
+
+    # CHECK CHANGELOG.md: Has been updated with entry corresponding to new Semantic Release Version
+    - name: CHECK CHANGELOG for new Semantic Version markdown section entry
+      if: ${{ env._RULE_FAILED == 'false' }}
+      id: check_changelog
+      run: |
+        reg_ex_search_failed=false
+
+        python -c "import re, sys; sys.exit(0 if re.search(r'^## ${SEMVER_REGEX}', open('${{ inputs.changelog_file }}').read(), re.MULTILINE) else 1)" || reg_ex_search_failed=true
+
+        if [ reg_ex_search_failed=true ]; then
+          echo "[WARN] Could not find an entry for the new Release Version '${{ steps.sem_ver.outputs.SEMVER }}' in Changelog file '${{ inputs.changelog_file }}'"
+
+          echo "[DEBUG] Changelog file contents:"
+          cat ${{ inputs.changelog_file }}
+
+          echo "[DEBUG] Regular Expression used to search Markdown section header:"
+          echo "^## ${SEMVER_REGEX}"
+
+          echo _RULE_FAILED=true >> $GITHUB_ENV
+        fi
+      shell: bash
+
+    # SET OUTPUT: Return Value
+    - name: 'SET OUTPUT (Return) value: ${{ env._RULE_FAILED }}'
+      id: set_output
+      run: echo retval='${{ env._RULE_FAILED }}' >> $GITHUB_OUTPUT
+      shell: bash
+
+branding:
+  icon: git-pull-request  # https://feathericons.com/
+  color: 'blue'  # background color of the badge
+  # white, black, yellow, blue, green, orange, red, purple, gray-dark

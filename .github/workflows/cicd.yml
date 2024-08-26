@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - "*"
-      # exclude pushes to 'release' branch
+      # do not do CI on 'release' and 'develop' branches
       - '!release'
-      - '!dev'
+      - '!develop'
     tags:
       - v*.*.*
 env:
@@ -92,7 +92,7 @@ jobs:
           "test_data": [
             {
               "changelog": "CHANGELOG.md",
-              "head_ref": "6b8a0707f43c895a7a180caee41b0aeb0a6bf77e",
+              "version_to_check": "1.0.0",
               "expected_return_value": "true"
             }
           ]
@@ -149,6 +149,7 @@ jobs:
     with:
       run_policy: '${{ needs.set_github_outputs.outputs.PIPE_DOCS_POLICY }}'
       python_version: ${{ needs.set_github_outputs.outputs.PIPE_DOCS_PY }}
+      dedicated_branches: 'main, release'
       command: 'tox -s false -e pin-deps -- -E docs && tox -e docs --sitepackages -vv -s false'
 
 ### Make a Github Release ###
