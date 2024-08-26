@@ -63,27 +63,29 @@ runs:
         #   echo "Exiting with error."
         #   exit 1
         # fi
-    
-    # VERIFY INPUTS: Changelog file exists in local (git) checkout
-    - name: Verify CHANGELOG file exists in local (git) checkout
-      run: |
-        if [ ! -f "${{ inputs.changelog_file }}" ]; then
-          echo "[ERROR] CHANGELOG file '${{ inputs.changelog_file }}' not found."
-          echo "Local (git) checkout does not contain a file with path '${{ inputs.changelog_file }}'."
-          echo "Input parameter 'changelog_file' must be a path to an existing file in the local checkout."
-          echo "- If repository was not checked out, please add the 'actions/checkout@v4' step, prior to this action."
-          echo "Exiting with error."
-          exit 1
-        fi
-      shell: bash
 
     # INITIALIZE Internal Flag for Rule Failure
     - name: INITIALIZE Internal Flag for Rule Failure
       run: echo _RULE_FAILED=false >> $GITHUB_ENV
       shell: bash
 
+    # CHECK CHANGELOG: Changelog file exists in local (git) checkout
+    - name: CHECK CHANGELOG file exists in local (git) checkout
+      if: ${{ env._RULE_FAILED == 'false' }}
+      run: |
+        if [ ! -f "${{ inputs.changelog_file }}" ]; then
+          echo "[ERROR] CHANGELOG file '${{ inputs.changelog_file }}' not found."
+          echo "Local (git) checkout does not contain a file with path '${{ inputs.changelog_file }}'."
+          echo "Input parameter 'changelog_file' must be a path to an existing file in the local checkout."
+          echo "- If repository was not checked out, please add the 'actions/checkout@v4' step, prior to this action."
+          echo "Returning 'false' as Output Value."
+          echo _RULE_FAILED=true >> $GITHUB_ENV
+        fi
+      shell: bash
+
     # CHECK CHANGELOG: Has any change since in MAIN branch
     - name: CHECK CHANGELOG has any changes
+      if: ${{ env._RULE_FAILED == 'false' }}
       run: |
         if git diff --exit-code "origin/${{ inputs.main_branch }}" '${{ inputs.ref_to_check }}' -- '${{ inputs.changelog_file }}'; then
           echo >&2 "[WARN] Changelog file '${{ inputs.changelog_file }}' has NO CHANGES at all, compared to '${{ inputs.main_branch }}' branch."
