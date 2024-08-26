@@ -166,7 +166,7 @@ jobs:
       # CASE 2: when the CD part of the Pipeline also runs that means that we are etiher on release
       # or main branch, and/or on an PR. So, in this case we want to enforce all job.needs to
       # be GREEN, so we simply pass only jobs: ${{ toJSON(needs) }}
-      # allowed-skips: ${{ needs.*.result == 'skipped' || '[]' }}
+      allowed-skips: ${{ ( ! startsWith(github.event.ref, 'refs/tags/v') && needs.*.result == 'skipped') || '[]' }}
       needs_json: ${{ toJSON(needs) }}  # should never change
 
   ### CD Signal ###
@@ -180,7 +180,7 @@ jobs:
 
   ### Make a Github Release ###
   gh_release:
-    needs: [test, test_false, signal_deploy]
+    needs: signal_deploy
     if: always() && ( vars.OVERRIDE_DEPLOY == 'true' || ( vars.OVERRIDE_DEPLOY != 'false' && needs.signal_deploy.outputs.AUTOMATED_DEPLOY == 'true' ) )
     uses: boromir674/automated-workflows/.github/workflows/gh-release.yml@v1.13.1
     name: 'GH Release'
