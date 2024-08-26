@@ -50,6 +50,9 @@ jobs:
           git commit -m "auto-commit: inject markdown section in CHANGELOG.md for testing action-changelog-ci"
           # git push origin ${_BRANCH}
 
+      # DEBUG
+      - run: cat ${{ matrix.test_data.changelog }}
+
       # WHEN the action is run, with conditions expected to pass all Rules
       - name: Run Action under conditions expecting to pass all Rules
         id: run_action

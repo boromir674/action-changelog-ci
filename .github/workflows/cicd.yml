@@ -10,13 +10,6 @@ on:
     tags:
       - v*.*.*
 env:
-  ### STRESS TEST Job MATRIX ###
-  FULL_MATRIX_STRATEGY: "{\"platform\": [\"ubuntu-latest\", \"macos-latest\", \"windows-latest\"], \"python-version\": [\"3.10\", \"3.11\"]}"
-  # Python 3.7 has reached End of Life (EOL) on June 27th, 2023
-  # Python 3.12 is in bugfix mode, same as 3.11 -> can start supporting 3.12 it
-  UBUNTU_PY310_STRATEGY: "{\"platform\":[\"ubuntu-latest\"], \"python-version\":[\"3.10\"]}"
-  TEST_STRATEGY: "{\"platform\":[\"ubuntu-latest\", \"macos-latest\", \"windows-latest\"], \"python-version\":[\"3.9\"]}"
-
   ##### JOB ON/OFF SWITCHES - Top/1st level overrides #####
   RUN_UNIT_TESTS: "true"
   DOCS_ON: "true"
@@ -26,7 +19,6 @@ env:
   ALWAYS_DOCS: "false"
   DOCS_JOB_POLICY: '2'  # {2, 3}
   DOCS_BUILDER_RUNTIME: "3.10"
-
   ##########################
 
 jobs:
@@ -83,84 +75,118 @@ jobs:
     ## Code Visualization - Pipeline Settings ##
       PIPE_CODE_VIZ_POLICY: ${{ steps.derive_code_viz_policy.outputs.POL }}
 
-  ### TEST Action in various End-2-End Scenarios ###
+  ### TEST Action returns 'false' (no Rules failed) in various End-2-End Scenarios ###
   test:
+    if: vars.OVERRIDE_UNIT_TESTS == 'true' || vars.OVERRIDE_UNIT_TESTS != 'false'
     uses: ./.github/workflows/_test.yml
     with:
       test_matrix: |
         {
           "test_data": [
             {
+              "name": "Test 'false' is returned, when Changelog is Updated according to the Rules",
               "changelog": "CHANGELOG.md",
+              "version_to_check": "1.0.0",
+              "expected_return_value": "false"
+            }
+          ]
+        }
+
+  ### TEST Action returns 'true' (some Rule failed) in various End-2-End Scenarios ###
+  test_false:
+    if: vars.OVERRIDE_UNIT_TESTS == 'true' || vars.OVERRIDE_UNIT_TESTS != 'false'
+    uses: ./.github/workflows/_test_action_returns_false.yml
+    with:
+      test_matrix: |
+        {
+          "test_data": [
+            {
+              "name": "Test 'true' is returned, when Changelog is NOT Updated",
+              "changelog": "CHANGELOG.md",
+              "version_to_check": "1.0.0",
+              "expected_return_value": "true"
+            },
+            {
+              "name": "Test 'true' is returned, if Changelog does NOT exist",
+              "changelog": "NON-EXISTING-CHANGELOG.md",
+              "version_to_check": "1.0.0",
+              "expected_return_value": "true"
+            },
+            {
+              "name": "Test 'true' is returned, if Changelog is missing Sem Ver Section",
+              "changelog": "CHANGELOG.md",
+              "emulated_changelog_markdown_section": "## v0.5.0",
+              "version_to_check": "1.0.0",
+              "expected_return_value": "true"
+            },
+            {
+              "name": "Test 'true' is returned, if Changelog is missing Sem Ver Section",
+              "changelog": "CHANGELOG.md",
+              "emulated_changelog_markdown_section": "## v0.5.0",
               "version_to_check": "1.0.0",
               "expected_return_value": "true"
             }
           ]
         }
 
-  ## JOB: Signal for Automated PyPI Upload ##
-  check_which_git_branch_we_are_on:
-    runs-on: ubuntu-latest
-    if: ${{ startsWith(github.event.ref, 'refs/tags/v') }}
-    env:
-      RELEASE_BR: ${{ vars.RELEASE_BRANCH || 'release' }}
-      MAIN_BR: ${{ vars.MAIN_BRANCH || 'main' }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - run: git branch --track "${{ env.RELEASE_BR }}" "origin/${{ env.RELEASE_BR }}"
-
-      - name: "Check if '${{ github.ref }}' tag is on '${{ env.MAIN_BR }}' branch"
-        uses: rickstaa/action-contains-tag@v1
-        id: main_contains_tag
-        with:
-          reference: ${{ env.MAIN_BR }}
-          tag: "${{ github.ref }}"
-      - name: "Check if '${{ github.ref }}' tag is on '${{ env.RELEASE_BR }}' branch"
-        uses: rickstaa/action-contains-tag@v1
-        id: release_contains_tag
-        with:
-          reference: ${{ env.RELEASE_BR }}
-          tag: "${{ github.ref }}"
-
-      - name: Pick Production or Test Environment, if tag on master or release branch respectively
-        id: set_environment_name
-        run: |
-          DEPLOY=true
-          if [[ "${{ steps.main_contains_tag.outputs.retval }}" == "true" ]]; then
-            echo "ENVIRONMENT_NAME=PROD_DEPLOYMENT" >> $GITHUB_OUTPUT
-          elif [[ "${{ steps.release_contains_tag.outputs.retval }}" == "true" ]]; then
-            echo "ENVIRONMENT_NAME=TEST_DEPLOYMENT" >> $GITHUB_OUTPUT
-          else
-            echo "A tag was pushed but not on master or release branch. No deployment will be done."
-            DEPLOY=false
-          fi
-          echo "AUTOMATED_DEPLOY=$DEPLOY" >> $GITHUB_OUTPUT
-    outputs:
-      ENVIRONMENT_NAME: ${{ steps.set_environment_name.outputs.ENVIRONMENT_NAME }}
-      AUTOMATED_DEPLOY: ${{ steps.set_environment_name.outputs.AUTOMATED_DEPLOY }}
-
-### DOCS BUILD/TEST - DOCUMENTATION SITE ###
+  ### DOCS BUILD/TEST - DOCUMENTATION SITE ###
   docs:
+    # IF PIPE_DOCS_POLICY != 0, will trigger by processing rules in order till TRUE
+    # - PIPE_DOCS_POLICY == 1
+    # - push event on 'main' branch AND PIPE_DOCS_POLICY == 2
+    # - push event of "v*" tag AND PIPE_DOCS_POLICY == 2
+    # - Documentation Changes Detected
     name: Build Documentation
     needs: set_github_outputs
-    uses: boromir674/automated-workflows/.github/workflows/policy_docs.yml@v1.3.0
+    uses: boromir674/automated-workflows/.github/workflows/policy_docs.yml@v1.13.1
     with:
       run_policy: '${{ needs.set_github_outputs.outputs.PIPE_DOCS_POLICY }}'
       python_version: ${{ needs.set_github_outputs.outputs.PIPE_DOCS_PY }}
-      dedicated_branches: 'main, release'
+      dedicated_branches: 'main, release'  # 
       command: 'tox -s false -e pin-deps -- -E docs && tox -e docs --sitepackages -vv -s false'
 
-### Make a Github Release ###
+  ### CI Checks - Quality Logic Gate ###
+  quality_gate:
+    # This Workflow implements both CI and CD, with its Jobs.
+    # So we put the Quality Gate for Dynamic Acceptance/Check here, which should be wired up to the CI Jobs.
+    if: always()
+    needs: ['test', 'test_false', 'docs']
+    uses: boromir674/automated-workflows/.github/workflows/go-single-status.yml@v1.13.1
+    with:
+      # leverage inputs to dynamically control the Acceptance Criteria
+      # by default all job.needs Jobs must be Green
+
+      # - This Gate can be used as an abstraction between CI and CD
+      # - This Gate can be used as an abstraction CI Checks and Branch Protection Rules.Required_Checks
+
+      # allowed-failures: docs, linters
+      # CASE 1: when this Workflow only runs the CI part (no deploy) then
+      # we want this Job to not affect the Green/Red Github Workflow Status.
+      # So in this case we dynamically add whatever skipped Jobs from Overrides to the 'allowed-skips'
+      # CASE 2: when the CD part of the Pipeline also runs that means that we are etiher on release
+      # or main branch, and/or on an PR. So, in this case we want to enforce all job.needs to
+      # be GREEN, so we simply pass only jobs: ${{ toJSON(needs) }}
+      # allowed-skips: ${{ needs.*.result == 'skipped' || '[]' }}
+      needs_json: ${{ toJSON(needs) }}  # should never change
+
+  ### CD Signal ###
+  signal_deploy:
+    needs: quality_gate
+    if: ${{ startsWith(github.event.ref, 'refs/tags/v') }}
+    uses: ./.github/workflows/_signal_deploy.yml
+    with:
+      main_branch: ${{ vars.GIT_MAIN_BRANCH || 'main' }}
+      release_branch: ${{ vars.GIT_RELEASE_BRANCH || 'release' }}
+
+  ### Make a Github Release ###
   gh_release:
-    needs: [test, check_which_git_branch_we_are_on]
-    if: ${{ needs.check_which_git_branch_we_are_on.outputs.AUTOMATED_DEPLOY == 'true' }}
-    uses: boromir674/automated-workflows/.github/workflows/gh-release.yml@test
+    needs: [test, test_false, signal_deploy]
+    if: always() && ( vars.OVERRIDE_DEPLOY == 'true' || ( vars.OVERRIDE_DEPLOY != 'false' && needs.signal_deploy.outputs.AUTOMATED_DEPLOY == 'true' ) )
+    uses: boromir674/automated-workflows/.github/workflows/gh-release.yml@v1.13.1
     name: 'GH Release'
     with:
       tag: ${{ github.ref_name }}
       draft: ${{ needs.check_which_git_branch_we_are_on.outputs.ENVIRONMENT_NAME == 'TEST_DEPLOYMENT' }}
     secrets:
       # passing the GH_TOKEN PAT, to render in GH as ie: 'boromir674 released this yesterday', instead of 'github-actions released this yesterday'
-      gh_token: ${{ secrets.GH_TOKEN }}
+      gh_token: ${{ secrets.GH_TOKEN_CREATE_RELEASE }}
