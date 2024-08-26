@@ -75,7 +75,7 @@ jobs:
     ## Code Visualization - Pipeline Settings ##
       PIPE_CODE_VIZ_POLICY: ${{ steps.derive_code_viz_policy.outputs.POL }}
 
-  ### TEST Action returns 'false' (no Rules failed) in various End-2-End Scenarios ###
+  ### TEST Action returns 'true' in Rule-passing End-2-End Scenarios ###
   test:
     if: vars.OVERRIDE_UNIT_TESTS == 'true' || vars.OVERRIDE_UNIT_TESTS != 'false'
     uses: ./.github/workflows/_test.yml
@@ -84,15 +84,15 @@ jobs:
         {
           "test_data": [
             {
-              "name": "Test 'false' is returned, when Changelog is Updated according to the Rules",
+              "name": "Test 'true' is returned, when Changelog is Updated according to the Rules",
               "changelog": "CHANGELOG.md",
               "version_to_check": "1.0.0",
-              "expected_return_value": "false"
+              "expected_return_value": "true"
             }
           ]
         }
 
-  ### TEST Action returns 'true' (some Rule failed) in various End-2-End Scenarios ###
+  ### TEST Action returns 'false' in Rule-failing End-2-End Scenarios ###
   test_false:
     if: vars.OVERRIDE_UNIT_TESTS == 'true' || vars.OVERRIDE_UNIT_TESTS != 'false'
     uses: ./.github/workflows/_test_action_returns_false.yml
@@ -101,30 +101,30 @@ jobs:
         {
           "test_data": [
             {
-              "name": "Test 'true' is returned, when Changelog is NOT Updated",
+              "name": "Test 'false' is returned, when Changelog is NOT Updated",
               "changelog": "CHANGELOG.md",
               "version_to_check": "1.0.0",
-              "expected_return_value": "true"
+              "expected_return_value": "false"
             },
             {
-              "name": "Test 'true' is returned, if Changelog does NOT exist",
+              "name": "Test 'false' is returned, if Changelog does NOT exist",
               "changelog": "NON-EXISTING-CHANGELOG.md",
               "version_to_check": "1.0.0",
-              "expected_return_value": "true"
+              "expected_return_value": "false"
             },
             {
-              "name": "Test 'true' is returned, if Changelog is missing Sem Ver Section",
+              "name": "Test 'false' is returned, if Changelog is missing Sem Ver Section",
               "changelog": "CHANGELOG.md",
               "emulated_changelog_markdown_section": "## v0.5.0",
               "version_to_check": "1.0.0",
-              "expected_return_value": "true"
+              "expected_return_value": "false"
             },
             {
-              "name": "Test 'true' is returned, if Changelog is missing Sem Ver Section",
+              "name": "Test 'false' is returned, if Changelog is missing Sem Ver Section",
               "changelog": "CHANGELOG.md",
               "emulated_changelog_markdown_section": "## v0.5.0",
               "version_to_check": "1.0.0",
-              "expected_return_value": "true"
+              "expected_return_value": "false"
             }
           ]
         }

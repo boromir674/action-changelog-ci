@@ -93,24 +93,28 @@ runs:
 
     # IF version_to_check NOT provided, create REGEX from Sem Ver pattern
     - name: SET RegEx Search Pattern to Sem Ver Pattern, IF Version NOT provided
+      id: regex_semver
       if: ${{ env._RULE_FAILED == 'false' && ! inputs.version_to_check }}
-      run: echo SEMVER_REGEX='(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?' >> $GITHUB_ENV
+      run: echo SEMVER_REGEX='(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?' >> $GITHUB_OUTPUT
       shell: bash
 
     # IF version_to_check NOT provided, create simple REGEX from it
     - name: SET RegEx Search Pattern to Input Version, IF provided
+      id: regex_version
       if: ${{ env._RULE_FAILED == 'false' && inputs.version_to_check }}
-      run: echo SEMVER_REGEX='v?${{ inputs.version_to_check }}' >> $GITHUB_ENV
+      run: echo SEMVER_REGEX='v?${{ inputs.version_to_check }}' >> $GITHUB_OUTPUT
       shell: bash
 
     # CHECK CHANGELOG.md: Has been updated with entry corresponding to new Semantic Release Version
     - name: CHECK CHANGELOG for new Semantic Version markdown section entry
       if: ${{ env._RULE_FAILED == 'false' }}
       id: check_changelog
+      env:
+        SEMVER_REGEX: ${{ steps.regex_semver.outputs.SEMVER_REGEX || steps.regex_version.outputs.SEMVER_REGEX }}
       run: |
         reg_ex_search_failed=false
 
-        python -c "import re, sys; sys.exit(0 if re.search(r'## ${SEMVER_REGEX}', open('${{ inputs.changelog_file }}').read(), re.MULTILINE) else 1)" || reg_ex_search_failed=true
+        python -c "import re, sys; sys.exit(0 if re.search(r'## ${{ env.SEMVER_REGEX }}', open('${{ inputs.changelog_file }}').read(), re.MULTILINE) else 1)" || reg_ex_search_failed=true
 
         if [ reg_ex_search_failed=true ]; then
           echo "[WARN] Could not find an entry for the new Release Version '${{ steps.sem_ver.outputs.SEMVER }}' in Changelog file '${{ inputs.changelog_file }}'"
@@ -119,7 +123,7 @@ runs:
           cat ${{ inputs.changelog_file }}
 
           echo "[DEBUG] Regular Expression used to search Markdown section header:"
-          echo "^## ${SEMVER_REGEX}"
+          echo "## ${{ env.SEMVER_REGEX }}"
 
           echo _RULE_FAILED=true >> $GITHUB_ENV
         fi
@@ -128,7 +132,7 @@ runs:
     # SET OUTPUT: Return Value
     - name: 'SET OUTPUT (Return) value: ${{ env._RULE_FAILED }}'
       id: set_output
-      run: echo retval='${{ env._RULE_FAILED }}' >> $GITHUB_OUTPUT
+      run: echo retval=${{ env._RULE_FAILED == 'false' && 'true' || 'false' }} >> $GITHUB_OUTPUT
       shell: bash
 
 branding:
