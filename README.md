@@ -2,6 +2,35 @@
 
 > Github Action for `CHANGELOG` **Continuous Integration**
 
+```mermaid
+flowchart LR
+
+REF_EXISTS?{Input Ref Exists?}
+REF_EXISTS? --YES --> EXIST?
+
+REF_EXISTS? --NO --> FAIL_N_EXIT(("Exit Step with failure"))
+
+EXIST?{"File Exists?"}
+
+EXIST? --YES --> CH
+EXIST? --NO --> RET_FALSE
+
+CH{"Has changed since `main`?"}
+
+CH --YES --> PAT
+CH --NO --> RET_FALSE
+
+PAT{"Has markdown Section
+matching Pattern?"}
+
+PAT --YES --> RET_TRUE
+PAT --NO --> RET_FALSE
+
+RET_TRUE(("Return `true`"))
+RET_FALSE(("Return `false`"))
+
+```
+
 ## Features
 
 1. Check whether your CHANGELOG was changed since `main` branch
