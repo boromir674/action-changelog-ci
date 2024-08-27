@@ -1,0 +1,17 @@
+on:
+  pull_request:
+    types: [closed]
+    branches:  # ALLOWED Base Branches
+      - release
+
+jobs:
+  open_pr_to_main:
+    if: github.event.pull_request.merged == true && (
+      startsWith(github.event.pull_request.title, '[GITOPS]')
+      )
+    uses: boromir674/automated-workflows/.github/workflows/go-pr-to-main.yml@fda3c758fa361c49e056977b1aeb0b2be01c99f1  # v1.6.1
+    with:
+      main_branch: ${{ vars.GIT_MAIN_BRANCH || 'main' }}
+      release_branch: ${{ vars.GIT_RELEASE_BRANCH || 'release' }}
+    secrets:
+      PR_RW_AND_ACTIONS_RW: '${{ secrets.GH_TOKEN_GITOPS_RELEASE_ME }}'
