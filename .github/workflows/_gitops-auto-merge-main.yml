@@ -1,0 +1,15 @@
+on:
+  push:
+    tags:
+      - auto-prod-*
+jobs:
+  # please add 'main' Rule Required Checks, before running this job
+  auto_merge_main_pr:
+    uses: boromir674/automated-workflows/.github/workflows/go-auto-merge-main.yml@v1.13.1
+    with:
+      commit_message: 'My Shiny Software Package'
+      # Optional inputs
+      main_branch: ${{ vars.GIT_MAIN_BRANCH || 'main' }}
+      release_branch: ${{ vars.GIT_RELEASE_BRANCH || 'release' }}
+    secrets:
+      pat_token: ${{ secrets.GH_TOKEN_GITOPS_PR_RW }}
