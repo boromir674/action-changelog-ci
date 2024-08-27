@@ -1,0 +1,11 @@
+on:
+  push:
+    tags:
+      - release-me  # Request to be included in next Release and create a Release
+jobs:
+  pr_to_release:
+    uses: boromir674/automated-workflows/.github/workflows/go-pr-to-release.yml@v1.13.1
+    with:
+      release_branch: ${{ vars.GIT_RELEASE_BRANCH || 'release' }}
+    secrets:
+      github_pat: ${{ secrets.GH_TOKEN_GITOPS_RELEASE_ME }}
