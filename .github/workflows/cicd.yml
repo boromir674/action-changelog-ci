@@ -22,59 +22,6 @@ env:
   ##########################
 
 jobs:
-  # we use the below to read the workflow env vars and be able to use in "- if:" Job conditionals
-  # now we can do -> if: ${{ needs.set_github_outputs.outputs.TESTS_ENABLED == 'true' }}
-  # github does not have a way to simply do "- if: ${{ env.RUN_UNIT_TESTS == 'true' }} " !!
-  set_github_outputs:
-    name: Read Workflow Env Section Vars and set Github Outputs
-    runs-on: ubuntu-latest
-    steps:
-      - name: Pass 'env' section variables to GITHUB_OUTPUT
-        id: pass-env-to-output
-        run: |
-          # set the matrix strategy to Full Matrix Stress Test if on master/main or stress-test branch or any tag
-          BRANCH_NAME=${GITHUB_REF_NAME}
-          if [[ $BRANCH_NAME == "stress-test" || $GITHUB_REF == refs/tags/* ]]; then
-            echo "matrix=$FULL_MATRIX_STRATEGY" >> $GITHUB_OUTPUT
-          else
-            echo "matrix=$UBUNTU_PY310_STRATEGY" >> $GITHUB_OUTPUT
-          fi
-          echo "TESTS_ENABLED=$RUN_UNIT_TESTS" >> $GITHUB_OUTPUT
-          echo "PUBLISH_ON_PYPI=$PUBLISH_ON_PYPI" >> $GITHUB_OUTPUT
-      ## Docker - Pipeline Settings ##
-      - id: derive_docker_policy
-        run: echo "POL=${{ (env.DOCKER_JOB_ON != 'true' && '0') || (env.ALWAYS_BUILD_N_PUBLSIH_DOCKER == 'true' && '1') || (env.DOCKER_JOB_POLICY == 'CDeployment' && '2') || (env.DOCKER_JOB_POLICY == 'CDelivery' && '3') }}" >> $GITHUB_OUTPUT
-      ## Static Code Analysis - Pipeline Settings ##
-      - id: derive_sqa_policy
-        run: echo "POL=${{ (env.RUN_LINT_CHECKS != 'true' && '0') || (env.ALWAYS_LINT == 'true' && '1') || env.LINT_JOB_POLICY }}" >> $GITHUB_OUTPUT
-      - id: read_sqa_py
-        run: echo SQA_PY=${{ env.STATIC_ANALYSIS_PY }} >> $GITHUB_OUTPUT
-      - id: read_pylint_baseline_score
-        run: echo PYLINT_BASELINE_SCORE=${{ env.PYLINT_SCORE_THRESHOLD }} >> $GITHUB_OUTPUT
-      ## Docs Build/Test - Pipeline Settings ##
-      - id: derive_docs_policy
-        run: echo "POL=${{ (env.DOCS_ON != 'true' && '0') || (env.ALWAYS_DOCS == 'true' && '1') || env.DOCS_JOB_POLICY }}" >> $GITHUB_OUTPUT
-      - id: read_docs_py
-        run: echo DOCS_PY=${{ env.DOCS_BUILDER_RUNTIME }} >> $GITHUB_OUTPUT
-      ## Code Visualization - Pipeline Settings ##
-      - id: derive_code_viz_policy
-        run: echo "POL=${{ (env.DRAW_DEPENDENCIES != 'true' && '0') || (env.ALWAYS_CODE_VIZ == 'true' && '1') || env.CODE_VIZ_POLICY }}" >> $GITHUB_OUTPUT
-    outputs:
-      matrix: ${{ steps.pass-env-to-output.outputs.matrix }}
-      TESTS_ENABLED: ${{ steps.pass-env-to-output.outputs.TESTS_ENABLED }}
-      PUBLISH_ON_PYPI: ${{ steps.pass-env-to-output.outputs.PUBLISH_ON_PYPI }}
-    ## Docker - Pipeline Settings ##
-      PIPE_DOCKER_POLICY: ${{ steps.derive_docker_policy.outputs.POL }}
-    ## Static Code Analysis - Pipeline Settings ##
-      PIPE_SQA_POLICY: ${{ steps.derive_sqa_policy.outputs.POL }}
-      PIPE_SQA_PY: ${{ steps.read_sqa_py.outputs.SQA_PY }}
-      PIPE_SQA_PYLINT_PASS_SCORE: ${{ steps.read_pylint_baseline_score.outputs.PYLINT_BASELINE_SCORE }}
-    ## Docs Build/Test - Pipeline Settings ##
-      PIPE_DOCS_POLICY: ${{ steps.derive_docs_policy.outputs.POL }}
-      PIPE_DOCS_PY: ${{ steps.read_docs_py.outputs.DOCS_PY }}
-    ## Code Visualization - Pipeline Settings ##
-      PIPE_CODE_VIZ_POLICY: ${{ steps.derive_code_viz_policy.outputs.POL }}
-
   ### TEST Action returns 'true' in Rule-passing End-2-End Scenarios ###
   test:
     if: vars.OVERRIDE_UNIT_TESTS == 'true' || vars.OVERRIDE_UNIT_TESTS != 'false'
@@ -87,6 +34,17 @@ jobs:
               "name": "Test 'true' is returned, when Changelog is Updated according to the Rules",
               "changelog": "CHANGELOG.md",
               "version_to_check": "1.0.0",
+              "expected_return_value": "true"
+            },
+            {
+              "name": "Test 'true' is returned, when Changelog is Updated according to the Rules",
+              "changelog": "CHANGELOG.md",
+              "version_to_check": "0.1.0",
+              "expected_return_value": "true"
+            },
+            {
+              "name": "Test 'true' is returned, when Sem Ver Pattern should be found in markdown",
+              "changelog": "CHANGELOG.md",
               "expected_return_value": "true"
             }
           ]
@@ -132,17 +90,17 @@ jobs:
   ### DOCS BUILD/TEST - DOCUMENTATION SITE ###
   docs:
     # IF PIPE_DOCS_POLICY != 0, will trigger by processing rules in order till TRUE
-    # - PIPE_DOCS_POLICY == 1
-    # - push event on 'main' branch AND PIPE_DOCS_POLICY == 2
-    # - push event of "v*" tag AND PIPE_DOCS_POLICY == 2
+    # - run_policy == 1
+    # - push event on 'main' branch AND run_policy == 2
+    # - push event of "v*" tag AND run_policy == 2
     # - Documentation Changes Detected
     name: Build Documentation
-    needs: set_github_outputs
     uses: boromir674/automated-workflows/.github/workflows/policy_docs.yml@v1.13.1
     with:
-      run_policy: '${{ needs.set_github_outputs.outputs.PIPE_DOCS_POLICY }}'
-      python_version: ${{ needs.set_github_outputs.outputs.PIPE_DOCS_PY }}
-      dedicated_branches: 'main, release'  # 
+      # 0: OFF, 1: Always, 2: Content Dynamic + Dedicated Branches, 3: Content Dynamic
+      run_policy: "${{ (vars.OVERRIDE_DOCS == 'false' && '0') || (vars.OVERRIDE_DOCS == 'true' && '1') || '2' }}"
+      python_version: 3.10
+      dedicated_branches: 'main, release'  #  only relevant when policy = 2
       command: 'tox -s false -e pin-deps -- -E docs && tox -e docs --sitepackages -vv -s false'
 
   ### CI Checks - Quality Logic Gate ###
@@ -159,13 +117,8 @@ jobs:
       # - This Gate can be used as an abstraction between CI and CD
       # - This Gate can be used as an abstraction CI Checks and Branch Protection Rules.Required_Checks
 
-      # allowed-failures: docs, linters
-      # CASE 1: when this Workflow only runs the CI part (no deploy) then
-      # we want this Job to not affect the Green/Red Github Workflow Status.
-      # So in this case we dynamically add whatever skipped Jobs from Overrides to the 'allowed-skips'
-      # CASE 2: when the CD part of the Pipeline also runs that means that we are etiher on release
-      # or main branch, and/or on an PR. So, in this case we want to enforce all job.needs to
-      # be GREEN, so we simply pass only jobs: ${{ toJSON(needs) }}
+      # - dynamically add discovered skipped Jobs to the 'allowed-skips', on branch push
+      # - on tag push all needed Jobs must succeed for Gate to pass
       allowed-skips: ${{ ( ! startsWith(github.event.ref, 'refs/tags/v') && needs.*.result == 'skipped') || '[]' }}
       needs_json: ${{ toJSON(needs) }}  # should never change
 
